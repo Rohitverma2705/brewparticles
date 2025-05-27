@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Particle Cloud</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #111;
+            color: #eee;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden; /* Hide scrollbars if controls overflow slightly */
+        }
+        #particleCanvas {
+            display: block;
+            background-color: #000000; /* Initial background, can be changed by controls */
+        }
+        .controls {
+            padding: 15px;
+            background-color: rgba(40, 40, 40, 0.9);
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px 20px;
+            width: 100%;
+            max-width: 1200px;
+            box-sizing: border-box;
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            max-height: 220px; /* Limit height and allow scrolling */
+            overflow-y: auto;
+            z-index: 1000;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .control-group label {
+            margin-bottom: 5px;
+            font-size: 0.9em;
+            color: #bbb;
+        }
+        .control-group input[type="range"],
+        .control-group input[type="color"],
+        .control-group select,
+        .control-group input[type="number"],
+        .control-group button {
+            width: 100%;
+            padding: 6px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background-color: #333;
+            color: #eee;
+            font-size: 0.9em;
+            box-sizing: border-box;
+        }
+        .control-group input[type="range"] {
+            padding: 0;
+        }
+        .control-group input[type="color"] {
+            padding: 2px;
+            height: 30px;
+        }
+        .control-group button {
+            cursor: pointer;
+            background-color: #007bff;
+            border-color: #007bff;
+            transition: background-color 0.2s;
+        }
+        .control-group button:hover {
+            background-color: #0056b3;
+        }
+        .control-group button#exportButton {
+            background-color: #28a745;
+            border-color: #28a745;
+        }
+        .control-group button#exportButton:hover {
+            background-color: #1e7e34;
+        }
+        .control-group span {
+            font-size: 0.8em;
+            color: #aaa;
+            text-align: right;
+        }
+
+        h1 {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 300;
+            font-size: 1.5em;
+            z-index: 1001;
+            margin: 0;
+        }
+
+        .controls::-webkit-scrollbar { width: 8px; }
+        .controls::-webkit-scrollbar-track { background: #282828; border-radius: 4px; }
+        .controls::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+        .controls::-webkit-scrollbar-thumb:hover { background: #777; }
+    </style>
+</head>
+<body>
+    <h1>Interactive Particle Cloud ☁️</h1>
+    <canvas id="particleCanvas"></canvas>
+
+    <div class="controls">
+        <div class="control-group">
+            <label for="particleCount">Particle Count: <span id="particleCountVal">300</span></label>
+            <input type="range" id="particleCount" min="10" max="2000" value="300" step="10">
+        </div>
+        <div class="control-group">
+            <label for="particleSize">Particle Size: <span id="particleSizeVal">3</span></label>
+            <input type="range" id="particleSize" min="1" max="20" value="3" step="0.5">
+        </div>
+        <div class="control-group">
+            <label for="particleSpeed">Max Speed: <span id="particleSpeedVal">1</span></label>
+            <input type="range" id="particleSpeed" min="0.1" max="5" value="1" step="0.1">
+        </div>
+        <div class="control-group">
+            <label for="particleColor">Particle Color:</label>
+            <input type="color" id="particleColor" value="#ffffff">
+        </div>
+        <div class="control-group">
+            <label for="bgColor">Background Color:</label>
+            <input type="color" id="bgColor" value="#000000">
+        </div>
+        <div class="control-group">
+            <label for="shape">Cloud Shape:</label>
+            <select id="shape">
+                <option value="random">Random Spread</option>
+                <option value="circle">Expanding Circle</option>
+                <option value="square">Expanding Square</option>
+                <option value="center_implode_explode">Implode/Explode</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label for="mouseInteraction">Mouse Interaction:</label>
+            <select id="mouseInteraction">
+                <option value="none">None</option>
+                <option value="repel">Repel</option>
+                <option value="attract">Attract</option>
+                <option value="create">Create Trail</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label for="mouseRadius">Mouse Influence Radius: <span id="mouseRadiusVal">150</span></label>
+            <input type="range" id="mouseRadius" min="10" max="500" value="150" step="10">
+        </div>
+        <div class="control-group">
+            <label for="lineLinking">Link Particles: <span id="lineLinkingVal">On</span></label>
+            <input type="checkbox" id="lineLinking" checked style="width: auto; height: auto; margin-top: 5px;">
+        </div>
+        <div class="control-group">
+            <label for="lineDistance">Link Distance: <span id="lineDistanceVal">100</span></label>
+            <input type="range" id="lineDistance" min="10" max="300" value="100" step="5">
+        </div>
+         <div class="control-group">
+            <label for="particleOpacity">Particle Opacity: <span id="particleOpacityVal">0.7</span></label>
+            <input type="range" id="particleOpacity" min="0.1" max="1" value="0.7" step="0.05">
+        </div>
+        <div class="control-group">
+            <label for="resetButton">Actions:</label>
+            <button id="resetButton">Reset Particles</button>
+        </div>
+        <div class="control-group">
+            <label for="exportButton">Export:</label>
+            <button id="exportButton">Export Configured Code</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('particleCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const controlsPanel = document.querySelector('.controls');
+        let controlsHeight = controlsPanel.offsetHeight > 0 ? controlsPanel.offsetHeight : 220; // Estimate if not rendered
+
+        function setCanvasDimensions() {
+            controlsHeight = controlsPanel.offsetHeight > 0 ? controlsPanel.offsetHeight : 220;
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight - controlsHeight - 20; // 20px buffer
+        }
+        setCanvasDimensions();
+
+
+        let particlesArray = [];
+        const mouse = {
+            x: null,
+            y: null,
+            radius: 150 // Default, will be updated by config
+        };
+
+        // --- Controls ---
+        const particleCountSlider = document.getElementById('particleCount');
+        const particleCountVal = document.getElementById('particleCountVal');
+        const particleSizeSlider = document.getElementById('particleSize');
+        const particleSizeVal = document.getElementById('particleSizeVal');
+        const particleSpeedSlider = document.getElementById('particleSpeed');
+        const particleSpeedVal = document.getElementById('particleSpeedVal');
+        const particleColorPicker = document.getElementById('particleColor');
+        const bgColorPicker = document.getElementById('bgColor');
+        const shapeSelector = document.getElementById('shape');
+        const mouseInteractionSelector = document.getElementById('mouseInteraction');
+        const mouseRadiusSlider = document.getElementById('mouseRadius');
+        const mouseRadiusVal = document.getElementById('mouseRadiusVal');
+        const lineLinkingCheckbox = document.getElementById('lineLinking');
+        const lineLinkingVal = document.getElementById('lineLinkingVal');
+        const lineDistanceSlider = document.getElementById('lineDistance');
+        const lineDistanceVal = document.getElementById('lineDistanceVal');
+        const particleOpacitySlider = document.getElementById('particleOpacity');
+        const particleOpacityVal = document.getElementById('particleOpacityVal');
+        const resetButton = document.getElementById('resetButton');
+        const exportButton = document.getElementById('exportButton');
+
+
+        let config = {
+            particleCount: parseInt(particleCountSlider.value),
+            particleSize: parseFloat(particleSizeSlider.value),
+            maxSpeed: parseFloat(particleSpeedSlider.value),
+            particleColor: particleColorPicker.value,
+            bgColor: bgColorPicker.value,
+            shape: shapeSelector.value,
+            mouseInteraction: mouseInteractionSelector.value,
+            mouseRadius: parseInt(mouseRadiusSlider.value),
+            linkParticles: lineLinkingCheckbox.checked,
+            linkDistance: parseInt(lineDistanceSlider.value),
+            particleOpacity: parseFloat(particleOpacitySlider.value),
+        };
+
+        function updateConfigAndDisplay() {
+            config.particleCount = parseInt(particleCountSlider.value);
+            particleCountVal.textContent = config.particleCount;
+
+            config.particleSize = parseFloat(particleSizeSlider.value);
+            particleSizeVal.textContent = config.particleSize;
+
+            config.maxSpeed = parseFloat(particleSpeedSlider.value);
+            particleSpeedVal.textContent = config.maxSpeed.toFixed(1);
+            
+            config.particleColor = particleColorPicker.value;
+            config.bgColor = bgColorPicker.value;
+            canvas.style.backgroundColor = config.bgColor; 
+
+            config.shape = shapeSelector.value;
+            config.mouseInteraction = mouseInteractionSelector.value;
+            
+            config.mouseRadius = parseInt(mouseRadiusSlider.value);
+            mouseRadiusVal.textContent = config.mouseRadius;
+            mouse.radius = config.mouseRadius; // Update global mouse object
+
+            config.linkParticles = lineLinkingCheckbox.checked;
+            lineLinkingVal.textContent = config.linkParticles ? 'On' : 'Off';
+
+            config.linkDistance = parseInt(lineDistanceSlider.value);
+            lineDistanceVal.textContent = config.linkDistance;
+
+            config.particleOpacity = parseFloat(particleOpacitySlider.value);
+            particleOpacityVal.textContent = config.particleOpacity.toFixed(2);
+        }
+        
+        particleCountSlider.addEventListener('input', updateConfigAndDisplay);
+        particleSizeSlider.addEventListener('input', updateConfigAndDisplay);
+        particleSpeedSlider.addEventListener('input', updateConfigAndDisplay);
+        particleColorPicker.addEventListener('input', updateConfigAndDisplay);
+        bgColorPicker.addEventListener('input', updateConfigAndDisplay);
+        shapeSelector.addEventListener('change', () => { updateConfigAndDisplay(); init(); });
+        mouseInteractionSelector.addEventListener('change', updateConfigAndDisplay);
+        mouseRadiusSlider.addEventListener('input', updateConfigAndDisplay);
+        lineLinkingCheckbox.addEventListener('change', updateConfigAndDisplay);
+        lineDistanceSlider.addEventListener('input', updateConfigAndDisplay);
+        particleOpacitySlider.addEventListener('input', updateConfigAndDisplay);
+        resetButton.addEventListener('click', init);
+        exportButton.addEventListener('click', exportConfiguredCode);
+
+
+        // --- Particle Class (remains the same) ---
+        class Particle {
+            constructor(x, y, size, color, speedX, speedY, opacity, canvasWidth, canvasHeight, initialConfig) {
+                this.x = x;
+                this.y = y;
+                this.size = size;
+                this.color = color;
+                this.speedX = speedX;
+                this.speedY = speedY;
+                this.opacity = opacity;
+                this.canvasWidth = canvasWidth;
+                this.canvasHeight = canvasHeight;
+                this.config = initialConfig; // Store a reference to config for dynamic shape properties
+
+                // For shape animations
+                this.baseX = x; 
+                this.baseY = y;
+                this.density = (Math.random() * 30) + 1;
+                this.orbitRadius = Math.random() * this.canvasWidth / 4 + 50;
+                this.angle = Math.random() * Math.PI * 2;
+            }
+
+            draw(ctx) { // Pass context
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = this.opacity;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.closePath();
+                ctx.fill();
+                ctx.globalAlpha = 1; // Reset globalAlpha
+            }
+
+            update(mouseData) { // Pass mouse data and current global config
+                // Wall collision
+                if (this.x + this.size > this.canvasWidth || this.x - this.size < 0) {
+                    this.speedX = -this.speedX;
+                     if (this.x + this.size > this.canvasWidth) this.x = this.canvasWidth - this.size;
+                     if (this.x - this.size < 0) this.x = this.size;
+                }
+                if (this.y + this.size > this.canvasHeight || this.y - this.size < 0) {
+                    this.speedY = -this.speedY;
+                    if (this.y + this.size > this.canvasHeight) this.y = this.canvasHeight - this.size;
+                    if (this.y - this.size < 0) this.y = this.size;
+                }
+                
+                // Apply shape logic
+                switch (this.config.shape) {
+                    case 'circle':
+                        this.angle += this.config.maxSpeed / 200;
+                        this.x = this.canvasWidth / 2 + Math.cos(this.angle) * this.orbitRadius * (Math.sin(Date.now() * 0.0001 * this.config.maxSpeed) * 0.5 + 0.5);
+                        this.y = this.canvasHeight / 2 + Math.sin(this.angle) * this.orbitRadius * (Math.sin(Date.now() * 0.0001 * this.config.maxSpeed) * 0.5 + 0.5);
+                        break;
+                    case 'square':
+                        this.angle += this.config.maxSpeed / 150;
+                        const scale = Math.sin(Date.now() * 0.0002 * this.config.maxSpeed) * 0.4 + 0.6;
+                        const side = this.orbitRadius * scale;
+                        const perimeterPos = (this.angle % (Math.PI * 2)) / (Math.PI * 2) * (side * 4);
+                        if (perimeterPos < side) { 
+                            this.x = this.canvasWidth/2 - side/2 + perimeterPos;
+                            this.y = this.canvasHeight/2 - side/2;
+                        } else if (perimeterPos < side * 2) { 
+                            this.x = this.canvasWidth/2 + side/2;
+                            this.y = this.canvasHeight/2 - side/2 + (perimeterPos - side);
+                        } else if (perimeterPos < side * 3) { 
+                            this.x = this.canvasWidth/2 + side/2 - (perimeterPos - side * 2);
+                            this.y = this.canvasHeight/2 + side/2;
+                        } else { 
+                            this.x = this.canvasWidth/2 - side/2;
+                            this.y = this.canvasHeight/2 + side/2 - (perimeterPos - side * 3);
+                        }
+                        break;
+                    case 'center_implode_explode':
+                        const dxToCenter = this.canvasWidth / 2 - this.x;
+                        const dyToCenter = this.canvasHeight / 2 - this.y;
+                        const distanceToCenter = Math.sqrt(dxToCenter * dxToCenter + dyToCenter * dyToCenter) || 1;
+                        const forceDirectionX = dxToCenter / distanceToCenter;
+                        const forceDirectionY = dyToCenter / distanceToCenter;
+                        const phase = Math.sin(Date.now() * 0.0003 * this.config.maxSpeed); 
+                        const forceMagnitude = phase * this.density * 0.02 * this.config.maxSpeed;
+                        
+                        this.speedX += forceDirectionX * forceMagnitude;
+                        this.speedY += forceDirectionY * forceMagnitude;
+                        
+                        this.speedX *= 0.95;
+                        this.speedY *= 0.95;
+
+                        this.x += this.speedX;
+                        this.y += this.speedY;
+                        break;
+                    case 'random':
+                    default:
+                        this.x += this.speedX;
+                        this.y += this.speedY;
+                        break;
+                }
+
+
+                // Mouse interaction
+                if (mouseData.x !== null && this.config.mouseInteraction !== 'none' && this.config.mouseInteraction !== 'create') {
+                    const dx = mouseData.x - this.x;
+                    const dy = mouseData.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+                    if (distance < mouseData.radius) {
+                        const forceDirectionX = dx / distance;
+                        const forceDirectionY = dy / distance;
+                        const force = (mouseData.radius - distance) / mouseData.radius; 
+                        
+                        let direction = 1; 
+                        if (this.config.mouseInteraction === 'repel') {
+                            direction = -1;
+                        }
+                        
+                        this.x -= forceDirectionX * force * this.config.maxSpeed * 2 * direction;
+                        this.y -= forceDirectionY * force * this.config.maxSpeed * 2 * direction;
+                    }
+                }
+                // Ensure particles stay within bounds after mouse interaction
+                if (this.x - this.size < 0) this.x = this.size;
+                if (this.x + this.size > this.canvasWidth) this.x = this.canvasWidth - this.size;
+                if (this.y - this.size < 0) this.y = this.size;
+                if (this.y + this.size > this.canvasHeight) this.y = this.canvasHeight - this.size;
+            }
+        }
+
+        function init() {
+            particlesArray = [];
+            // Ensure mouse.radius is set from config before init
+            mouse.radius = config.mouseRadius; 
+
+            for (let i = 0; i < config.particleCount; i++) {
+                let size = Math.random() * config.particleSize + 1;
+                if (config.particleSize < 1) size = config.particleSize;
+                
+                let x = Math.random() * canvas.width;
+                let y = Math.random() * canvas.height;
+                
+                let speedX = (Math.random() * config.maxSpeed * 2) - config.maxSpeed;
+                let speedY = (Math.random() * config.maxSpeed * 2) - config.maxSpeed;
+                
+                particlesArray.push(new Particle(x, y, size, config.particleColor, speedX, speedY, config.particleOpacity, canvas.width, canvas.height, config));
+            }
+        }
+        
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            particlesArray.forEach(particle => {
+                particle.color = config.particleColor; // Update color dynamically
+                particle.opacity = config.particleOpacity; // Update opacity dynamically
+                particle.size = (Math.random() * (config.particleSize -1)) + 1; // Randomize size slightly within configured max
+                if (config.particleSize < 1) particle.size = config.particleSize;
+                
+                // Update particle's internal reference to canvas dimensions if they change (though Particle class itself doesn't use it for drawing currently)
+                particle.canvasWidth = canvas.width;
+                particle.canvasHeight = canvas.height;
+                particle.config = config; // Ensure particle has latest config for shape logic
+            });
+
+            // Adjust particle count if changed (for the main interactive visualizer)
+            if (particlesArray.length > config.particleCount) {
+                particlesArray.splice(config.particleCount);
+            } else if (particlesArray.length < config.particleCount) {
+                for (let i = particlesArray.length; i < config.particleCount; i++) {
+                    let size = Math.random() * config.particleSize + 1;
+                     if (config.particleSize < 1) size = config.particleSize;
+                    let x = Math.random() * canvas.width;
+                    let y = Math.random() * canvas.height;
+                    let speedX = (Math.random() * config.maxSpeed * 2) - config.maxSpeed;
+                    let speedY = (Math.random() * config.maxSpeed * 2) - config.maxSpeed;
+                    particlesArray.push(new Particle(x, y, size, config.particleColor, speedX, speedY, config.particleOpacity, canvas.width, canvas.height, config));
+                }
+            }
+
+            for (let i = 0; i < particlesArray.length; i++) {
+                particlesArray[i].update(mouse); // Pass mouse object
+                particlesArray[i].draw(ctx); // Pass context
+            }
+
+            if (config.linkParticles) {
+                connectParticles(ctx, particlesArray, config); // Pass context, particles, and config
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        function connectParticles(context, currentParticles, currentConfig) {
+            let opacityValue = 0.5; 
+            for (let a = 0; a < currentParticles.length; a++) {
+                for (let b = a + 1; b < currentParticles.length; b++) {
+                    const dx = currentParticles[a].x - currentParticles[b].x;
+                    const dy = currentParticles[a].y - currentParticles[b].y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < currentConfig.linkDistance) {
+                        opacityValue = 1 - (distance / currentConfig.linkDistance);
+                        context.strokeStyle = currentConfig.particleColor; 
+                        context.globalAlpha = opacityValue * currentConfig.particleOpacity * 0.5; 
+                        context.lineWidth = 0.5;
+                        context.beginPath();
+                        context.moveTo(currentParticles[a].x, currentParticles[a].y);
+                        context.lineTo(currentParticles[b].x, currentParticles[b].y);
+                        context.stroke();
+                    }
+                }
+            }
+            context.globalAlpha = 1; 
+        }
+
+        // --- Event Listeners ---
+        window.addEventListener('mousemove', (event) => {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = event.clientX - rect.left;
+            mouse.y = event.clientY - rect.top;
+
+            if (config.mouseInteraction === 'create' && particlesArray.length < config.particleCount) {
+                 for(let i=0; i<2; i++){ 
+                    if (particlesArray.length >= config.particleCount) break; 
+                    let size = Math.random() * config.particleSize + 1;
+                     if (config.particleSize < 1) size = config.particleSize;
+                    let speedX = (Math.random() * 0.4) - 0.2; 
+                    let speedY = (Math.random() * 0.4) - 0.2;
+                    particlesArray.push(new Particle(mouse.x, mouse.y, size, config.particleColor, speedX, speedY, config.particleOpacity, canvas.width, canvas.height, config));
+                 }
+            }
+        });
+        
+        canvas.addEventListener('mouseleave', () => { // More reliable for canvas interaction
+            mouse.x = null;
+            mouse.y = null;
+        });
+
+        window.addEventListener('resize', () => {
+            setCanvasDimensions();
+            init(); 
+        });
+
+        // --- Export Functionality ---
+        function exportConfiguredCode() {
+            const currentConfig = JSON.parse(JSON.stringify(config)); // Deep clone config
+
+            // Get string representations of necessary functions
+            const particleClassString = Particle.toString();
+            const connectParticlesFuncString = connectParticles.toString();
+            
+            // Note: The update and draw methods are part of Particle.toString()
+            // The init and animate functions for export will be slightly different
+
+            const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exported Particle Animation</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: ${currentConfig.bgColor}; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <canvas id="particleCanvasExport"></canvas>
+    <script>
+        const canvas = document.getElementById('particleCanvasExport');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const config = ${JSON.stringify(currentConfig)};
+
+        let particlesArray = [];
+        const mouse = {
+            x: null,
+            y: null,
+            radius: config.mouseRadius 
+        };
+
+        ${particleClassString}
+        ${connectParticlesFuncString}
+
+        function initExport() {
+            particlesArray = [];
+            for (let i = 0; i < config.particleCount; i++) {
+                let size = Math.random() * config.particleSize + 1;
+                if (config.particleSize < 1) size = config.particleSize;
+                
+                let x = Math.random() * canvas.width;
+                let y = Math.random() * canvas.height;
+                
+                let speedX = (Math.random() * config.maxSpeed * 2) - config.maxSpeed;
+                let speedY = (Math.random() * config.maxSpeed * 2) - config.maxSpeed;
+                
+                // Pass canvas.width, canvas.height, and the hardcoded config to the Particle constructor
+                particlesArray.push(new Particle(x, y, size, config.particleColor, speedX, speedY, config.particleOpacity, canvas.width, canvas.height, config));
+            }
+        }
+
+        function animateExport() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            particlesArray.forEach(particle => {
+                // These properties are already set in Particle constructor or directly via config
+                // but we ensure color and opacity can be dynamic if we were to change config in exported code (not typical)
+                particle.color = config.particleColor;
+                particle.opacity = config.particleOpacity;
+                particle.size = (Math.random() * (config.particleSize -1)) + 1; 
+                if (config.particleSize < 1) particle.size = config.particleSize;
+
+                particle.canvasWidth = canvas.width; // Update if canvas resized
+                particle.canvasHeight = canvas.height; // Update if canvas resized
+                // particle.config = config; // Already set, but good for clarity
+            });
+
+            // In exported version, particle count is fixed by config.particleCount at init.
+            // No dynamic adding/removing unless by 'create' mouse interaction.
+
+            for (let i = 0; i < particlesArray.length; i++) {
+                particlesArray[i].update(mouse); // Pass mouse data
+                particlesArray[i].draw(ctx);     // Pass context
+            }
+
+            if (config.linkParticles) {
+                connectParticles(ctx, particlesArray, config); // Pass context, particles, and the hardcoded config
+            }
+
+            requestAnimationFrame(animateExport);
+        }
+
+        window.addEventListener('mousemove', (event) => {
+            const rect = canvas.getBoundingClientRect(); // Important for correct mouse pos on canvas
+            mouse.x = event.clientX - rect.left;
+            mouse.y = event.clientY - rect.top;
+
+            if (config.mouseInteraction === 'create') {
+                // Limit creation to not significantly exceed original particleCount for performance in exported version
+                // Or simply let it create up to config.particleCount if it started with fewer.
+                // Current initExport creates all particles, so 'create' might add more if not careful.
+                // Let's allow 'create' to add a few more, but it won't manage against a dynamic slider.
+                 if (particlesArray.length < config.particleCount + 50) { // Allow creating a few more
+                    for(let i=0; i<2; i++){ 
+                        let size = Math.random() * config.particleSize + 1;
+                        if (config.particleSize < 1) size = config.particleSize;
+                        let speedX = (Math.random() * 0.4) - 0.2; 
+                        let speedY = (Math.random() * 0.4) - 0.2;
+                        particlesArray.push(new Particle(mouse.x, mouse.y, size, config.particleColor, speedX, speedY, config.particleOpacity, canvas.width, canvas.height, config));
+                    }
+                 }
+            }
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            mouse.x = null;
+            mouse.y = null;
+        });
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            // Re-initialize particles to fit new canvas size and distribution
+            // This ensures shapes like 'circle' or 'square' recalculate based on new dimensions
+            initExport(); 
+        });
+
+        initExport();
+        animateExport();
+    <\/script> 
+</body>
+</html>`; // Note: <\/script> is used to avoid issues if this script itself is inside a script tag.
+
+            const filename = 'particle-animation.html';
+            const element = document.createElement('a');
+            element.setAttribute('href', 'data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
+            element.setAttribute('download', filename);
+            element.style.display = 'none';
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+        }
+
+
+        // Initial setup
+        updateConfigAndDisplay(); 
+        init();
+        animate();
+
+    </script>
+</body>
+</html>
